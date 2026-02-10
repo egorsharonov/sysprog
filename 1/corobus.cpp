@@ -215,9 +215,6 @@ coro_bus_send(struct coro_bus *bus, int channel, unsigned data)
 	for (;;) {
 		int rc = coro_bus_try_send(bus, channel, data);
 		if (rc == 0) {
-			struct coro_bus_channel *ch = channel_get(bus, channel);
-			if (ch != NULL && ch->data.size() < ch->size_limit)
-				wakeup_queue_wakeup_first(&ch->send_queue);
 			return 0;
 		}
 		if (coro_bus_errno() == CORO_BUS_ERR_NO_CHANNEL)
@@ -292,8 +289,6 @@ coro_bus_try_recv(struct coro_bus *bus, int channel, unsigned *data)
 	*data = ch->data.front();
 	ch->data.pop_front();
 	wakeup_queue_wakeup_first(&ch->send_queue);
-	if (!ch->data.empty())
-		wakeup_queue_wakeup_first(&ch->recv_queue);
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	return 0;
 }
@@ -403,8 +398,6 @@ coro_bus_send_v(struct coro_bus *bus, int channel, const unsigned *data, unsigne
 		for (unsigned i = 0; i < to_send; ++i)
 			ch->data.push_back(data[i]);
 		wakeup_queue_wakeup_first(&ch->recv_queue);
-		if (ch->data.size() < ch->size_limit)
-			wakeup_queue_wakeup_first(&ch->send_queue);
 		coro_bus_errno_set(CORO_BUS_ERR_NONE);
 		return (int)to_send;
 	}
@@ -429,8 +422,6 @@ coro_bus_try_send_v(struct coro_bus *bus, int channel, const unsigned *data, uns
 	for (unsigned i = 0; i < to_send; ++i)
 		ch->data.push_back(data[i]);
 	wakeup_queue_wakeup_first(&ch->recv_queue);
-	if (ch->data.size() < ch->size_limit)
-		wakeup_queue_wakeup_first(&ch->send_queue);
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	return (int)to_send;
 }
@@ -461,8 +452,6 @@ coro_bus_recv_v(struct coro_bus *bus, int channel, unsigned *data, unsigned capa
 			ch->data.pop_front();
 		}
 		wakeup_queue_wakeup_first(&ch->send_queue);
-		if (!ch->data.empty())
-			wakeup_queue_wakeup_first(&ch->recv_queue);
 		coro_bus_errno_set(CORO_BUS_ERR_NONE);
 		return (int)to_recv;
 	}
@@ -488,8 +477,6 @@ coro_bus_try_recv_v(struct coro_bus *bus, int channel, unsigned *data, unsigned 
 		ch->data.pop_front();
 	}
 	wakeup_queue_wakeup_first(&ch->send_queue);
-	if (!ch->data.empty())
-		wakeup_queue_wakeup_first(&ch->recv_queue);
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	return (int)to_recv;
 }
