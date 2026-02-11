@@ -63,6 +63,16 @@ wakeup_queue_wakeup_all(struct wakeup_queue *queue)
 	}
 }
 
+static void
+wakeup_queue_wakeup_n(struct wakeup_queue *queue, size_t count)
+{
+	for (size_t i = 0; i < count; ++i) {
+		if (rlist_empty(&queue->coros))
+			return;
+		wakeup_queue_wakeup_first(queue);
+	}
+}
+
 struct coro_bus_channel {
 	/** Channel max capacity. */
 	size_t size_limit;
@@ -376,8 +386,10 @@ coro_bus_try_broadcast(struct coro_bus *bus, unsigned data)
 int
 coro_bus_send_v(struct coro_bus *bus, int channel, const unsigned *data, unsigned count)
 {
-	if (count == 0)
+	if (count == 0) {
+		coro_bus_errno_set(CORO_BUS_ERR_NONE);
 		return 0;
+	}
 	for (;;) {
 		struct coro_bus_channel *ch = channel_get(bus, channel);
 		if (ch == NULL) {
@@ -397,7 +409,7 @@ coro_bus_send_v(struct coro_bus *bus, int channel, const unsigned *data, unsigne
 		unsigned to_send = std::min<unsigned>(count, (unsigned)free_space);
 		for (unsigned i = 0; i < to_send; ++i)
 			ch->data.push_back(data[i]);
-		wakeup_queue_wakeup_first(&ch->recv_queue);
+		wakeup_queue_wakeup_n(&ch->recv_queue, to_send);
 		coro_bus_errno_set(CORO_BUS_ERR_NONE);
 		return (int)to_send;
 	}
@@ -406,8 +418,10 @@ coro_bus_send_v(struct coro_bus *bus, int channel, const unsigned *data, unsigne
 int
 coro_bus_try_send_v(struct coro_bus *bus, int channel, const unsigned *data, unsigned count)
 {
-	if (count == 0)
+	if (count == 0) {
+		coro_bus_errno_set(CORO_BUS_ERR_NONE);
 		return 0;
+	}
 	struct coro_bus_channel *ch = channel_get(bus, channel);
 	if (ch == NULL) {
 		coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
@@ -421,7 +435,7 @@ coro_bus_try_send_v(struct coro_bus *bus, int channel, const unsigned *data, uns
 	unsigned to_send = std::min<unsigned>(count, (unsigned)free_space);
 	for (unsigned i = 0; i < to_send; ++i)
 		ch->data.push_back(data[i]);
-	wakeup_queue_wakeup_first(&ch->recv_queue);
+	wakeup_queue_wakeup_n(&ch->recv_queue, to_send);
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	return (int)to_send;
 }
@@ -429,8 +443,10 @@ coro_bus_try_send_v(struct coro_bus *bus, int channel, const unsigned *data, uns
 int
 coro_bus_recv_v(struct coro_bus *bus, int channel, unsigned *data, unsigned capacity)
 {
-	if (capacity == 0)
+	if (capacity == 0) {
+		coro_bus_errno_set(CORO_BUS_ERR_NONE);
 		return 0;
+	}
 	for (;;) {
 		struct coro_bus_channel *ch = channel_get(bus, channel);
 		if (ch == NULL) {
@@ -451,7 +467,7 @@ coro_bus_recv_v(struct coro_bus *bus, int channel, unsigned *data, unsigned capa
 			data[i] = ch->data.front();
 			ch->data.pop_front();
 		}
-		wakeup_queue_wakeup_first(&ch->send_queue);
+		wakeup_queue_wakeup_n(&ch->send_queue, to_recv);
 		coro_bus_errno_set(CORO_BUS_ERR_NONE);
 		return (int)to_recv;
 	}
@@ -460,8 +476,10 @@ coro_bus_recv_v(struct coro_bus *bus, int channel, unsigned *data, unsigned capa
 int
 coro_bus_try_recv_v(struct coro_bus *bus, int channel, unsigned *data, unsigned capacity)
 {
-	if (capacity == 0)
+	if (capacity == 0) {
+		coro_bus_errno_set(CORO_BUS_ERR_NONE);
 		return 0;
+	}
 	struct coro_bus_channel *ch = channel_get(bus, channel);
 	if (ch == NULL) {
 		coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
@@ -476,7 +494,7 @@ coro_bus_try_recv_v(struct coro_bus *bus, int channel, unsigned *data, unsigned 
 		data[i] = ch->data.front();
 		ch->data.pop_front();
 	}
-	wakeup_queue_wakeup_first(&ch->send_queue);
+	wakeup_queue_wakeup_n(&ch->send_queue, to_recv);
 	coro_bus_errno_set(CORO_BUS_ERR_NONE);
 	return (int)to_recv;
 }
